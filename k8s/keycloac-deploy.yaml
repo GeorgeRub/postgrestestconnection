@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: keycloak
+  labels:
+    app: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      name: keycloak
+      labels:
+        app: keycloak
+    spec:
+      containers:
+        - env:
+              - name: KEYCLOAK_ADMIN
+                value: admin
+              - name: KEYCLOAK_ADMIN_PASSWORD
+                value: admin
+              - name: KC_DB
+                value: postgres
+              - name: KC_DB_URL_HOST
+                value: 192.168.2.58
+              - name: KC_DB_URL
+                value: jdbc:postgresql://192.168.2.58/keycloak
+              - name: KC_DB_URL_PORT
+                value: "5432"
+              - name: KC_TRANSACTION_XA_ENABLED
+                value: "true"
+              - name: KC_DB_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    key: spring.db.username
+                    name: post-secret
+              - name: KC_DB_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    key: spring.db.password
+                    name: post-secret
+          name: keycloak
+          image: quay.io/keycloak/keycloak
+          args: ["start-dev"]
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+            - containerPort: 8443
+              name: https
+              protocol: TCP
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: keycloak
+  labels:
+    app: keycloak
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+    - name: https
+      port: 8443
+      targetPort: 8443
+  selector:
+    app: keycloak
+  type: NodePort
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak-ingress
+  namespace: keycloak
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: keycloak.local.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8443
+
+---
+apiVersion: v1
+data:
+  spring.db.password: Z2Vvcmdl
+  spring.db.username: Z2Vvcmdl
+kind: Secret
+metadata:
+  creationTimestamp: "2023-07-31T00:47:14Z"
+  name: post-secret
+  namespace: keycloak
+  resourceVersion: "58691"
+  uid: c436632d-05fd-488c-b3b5-9b98e0117dfc
+type: Opaque
